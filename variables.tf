@@ -17,21 +17,16 @@ variable "workspace_desc" {
   default     = "Created by Terraform Workspacer module."
 }
 
-variable "execution_mode" {
-  type        = string
-  description = "Execution mode of Workspace. Valid values are `remote`, `local`, or `agent`."
-  default     = "remote"
-
-  validation {
-    condition     = contains(["remote", "local", "agent"], var.execution_mode)
-    error_message = "Valid values are `remote`, `local`, or `agent`."
-  }
-}
-
 variable "agent_pool_id" {
   type        = string
   description = "ID of existing Agent Pool to assign to Workspace. Only use if `execution_mode` is set to `agent`."
   default     = null
+}
+
+variable "allow_destroy_plan" {
+  type        = bool
+  description = "Boolean setting to allow destroy plans on Workspace."
+  default     = true
 }
 
 variable "auto_apply" {
@@ -40,16 +35,26 @@ variable "auto_apply" {
   default     = false
 }
 
-variable "terraform_version" {
+variable "execution_mode" {
   type        = string
-  description = "Version of Terraform to use for this Workspace."
+  description = "Execution mode of Workspace. Valid values are `remote`, `local`, or `agent`."
   default     = null
+  validation {
+    condition     = var.execution_mode != null ? contains(["remote", "local", "agent"], var.execution_mode) : true
+    error_message = "If not null, valid values are `remote`, `local`, or `agent`."
+  }
 }
 
-variable "working_directory" {
-  type        = string
-  description = "The relative path that Terraform will execute within. Defaults to the root of the repo."
-  default     = null
+variable "assessments_enabled" {
+  type        = bool
+  description = "Boolean to enable Health Assessments such as Drift Detection on Workspace."
+  default     = false
+}
+
+variable "file_triggers_enabled" {
+  type        = bool
+  description = "Boolean to filter Runs triggered via webhook (VCS push) based on `working_directory` and `trigger_prefixes`."
+  default     = true
 }
 
 variable "global_remote_state" {
@@ -64,6 +69,18 @@ variable "remote_state_consumer_ids" {
   default     = null
 }
 
+variable "queue_all_runs" {
+  type        = bool
+  description = "Boolean setting for Workspace to automatically queue all Runs after creation."
+  default     = true
+}
+
+variable "speculative_enabled" {
+  type        = bool
+  description = "Boolean to allow Speculative Plans on Workspace."
+  default     = true
+}
+
 variable "structured_run_output_enabled" {
   type        = bool
   description = "Boolean to enable the advanced Run UI. Set to `false` for the traditional console-based Run output."
@@ -76,34 +93,16 @@ variable "ssh_key_id" {
   default     = null
 }
 
-variable "allow_destroy_plan" {
-  type        = bool
-  description = "Boolean setting to allow destroy plans on Workspace."
-  default     = true
-}
-
 variable "workspace_tags" {
   type        = list(string)
   description = "List of tag names to apply to Workspace. Tags must only contain letters, numbers, or colons."
   default     = []
 }
 
-variable "vcs_repo" {
-  type        = map(string)
-  description = "Map of settings to connect Workspace to VCS repository."
-  default     = {}
-}
-
-variable "queue_all_runs" {
-  type        = bool
-  description = "Boolean setting for Workspace to automatically queue all Runs after creation."
-  default     = true
-}
-
-variable "file_triggers_enabled" {
-  type        = bool
-  description = "Boolean to filter Runs triggered via webhook (VCS push) based on `working_directory` and `trigger_prefixes`."
-  default     = true
+variable "terraform_version" {
+  type        = string
+  description = "Version of Terraform to use for this Workspace."
+  default     = null
 }
 
 variable "trigger_prefixes" {
@@ -112,16 +111,40 @@ variable "trigger_prefixes" {
   default     = null
 }
 
-variable "tags_regex" {
-  type        = string
-  description = "A regular expression used to trigger a Workspace run for matching Git tags. This option conflicts with `trigger_patterns` and `trigger_prefixes`. Should only set this value if the former is not being used."
+variable "trigger_patterns" {
+  type        = list(string)
+  description = "List of glob patterns that describe the files monitored for changes to trigger Runs in Workspace. Mutually exclusive with `trigger_prefixes`. Only available with TFC."
   default     = null
 }
 
-variable "speculative_enabled" {
+variable "working_directory" {
+  type        = string
+  description = "The relative path that Terraform will execute within. Defaults to the root of the repo."
+  default     = null
+}
+
+variable "vcs_repo" {
+  type        = map(string)
+  description = "Map of settings to connect Workspace to VCS repository."
+  default     = {}
+}
+
+variable "tags_regex" {
+  type        = string
+  description = "A regular expression used to trigger a Run in Workspace for matching Git tags. This option conflicts with `trigger_patterns` and `trigger_prefixes`. Should only set this value if the former is not being used."
+  default     = null
+}
+
+variable "force_delete" {
   type        = bool
-  description = "Boolean to allow Speculative Plans on Workspace."
-  default     = true
+  description = "Boolean to allow deletion of the Workspace if there is a Terraform state that contains resources."
+  default     = null
+}
+
+variable "project_name" {
+  type        = string
+  description = "Name of existing Project to place Workspace in."
+  default     = null
 }
 
 #------------------------------------------------------------------------------
@@ -139,6 +162,12 @@ variable "tfvars_sensitive" {
   default     = {}
 }
 
+variable "tfvars_ignore_changes" {
+  type        = any
+  description = "Map of Terraform variables to add to Workspace whereby changes made outside of Terraform will be ignored."
+  default     = {}
+}
+
 variable "envvars" {
   type        = map(string)
   description = "Map of Environment variables to add to Workspace."
@@ -148,6 +177,12 @@ variable "envvars" {
 variable "envvars_sensitive" {
   type        = map(string)
   description = "Map of sensitive Environment variables to add to Workspace."
+  default     = {}
+}
+
+variable "envvars_ignore_changes" {
+  type        = map(string)
+  description = "Map of sensitive Environment variables to add to Workspace whereby changes made outside of Terraform will be ignored."
   default     = {}
 }
 
@@ -169,7 +204,7 @@ variable "custom_team_access" {
         state_versions    = string
         sentinel_mocks    = string
         workspace_locking = bool
-        runs_tasks        = string
+        run_tasks         = bool
       }
     )
   )
@@ -214,5 +249,14 @@ variable "run_trigger_source_workspaces" {
 variable "variable_set_names" {
   type        = list(string)
   description = "List of names of existing Variable Sets to add this Workspace into."
+  default     = []
+}
+
+#------------------------------------------------------------------------------
+# Workspace Policy Sets
+#------------------------------------------------------------------------------
+variable "policy_set_names" {
+  type        = list(string)
+  description = "List of names of existing Policy Sets to add this Workspace into."
   default     = []
 }

@@ -7,7 +7,7 @@ terraform {
   required_providers {
     tfe = {
       source  = "hashicorp/tfe"
-      version = "0.36.1"
+      version = "0.44.1"
     }
   }
 }
@@ -18,7 +18,7 @@ provider "tfe" {
 
 module "workspacer" {
   source  = "alexbasista/workspacer/tfe"
-  version = "0.5.0"
+  version = "0.9.0"
 
   organization   = "my-tfe-org"
   workspace_name = "my-new-ws"
@@ -102,7 +102,7 @@ The `custom_team_access` input variable accepts a map of objects whereby each ob
       state_versions    = "read"
       sentinel_mocks    = "none"
       workspace_locking = false
-      run_tasks         = "none"
+      run_tasks         = false
     }
     "security-team" = {
       runs              = "plan"
@@ -110,7 +110,7 @@ The `custom_team_access` input variable accepts a map of objects whereby each ob
       state_versions    = "read-outputs"
       sentinel_mocks    = "read"
       workspace_locking = true
-      run_tasks         = "read"
+      run_tasks         = true
     }
   }
 ```
@@ -164,6 +164,23 @@ To add the Workspace into one or more already existing Variable Sets, the input 
     "my-aws-creds",
     "tfe-api-token"
   ]
+```
+
+### Policy Sets
+To add the Workspace into one or more already existing Policy Sets, the input variable `policy_set_names` accepts a list of Policy Set names.
+
+```hcl
+  policy_set_names = [
+    "sentinel-global",
+    "sentinel-prod"
+  ]
+```
+
+### Projects
+To place the Workspace into an existing Project, set the input variable `project_name`.
+
+```hcl
+project_name = "my-project"
 ```
 <p>&nbsp;</p>
 
